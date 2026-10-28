@@ -1,0 +1,7 @@
+# Cloudflare Pages project config (static assets only, no Functions, no bindings).
+# `wrangler pages deploy` reads pages_build_output_dir, so the deploy command
+# needs no path argument. Create the project once before the first CI deploy:
+#   npx wrangler pages project create highlight-edl --production-branch=main
+name = "highlight-edl"
+pages_build_output_dir = "./dist"
+compatibility_date = "2026-10-01"
