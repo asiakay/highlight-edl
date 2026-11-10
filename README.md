@@ -41,9 +41,11 @@ npm run build      # typecheck + production build into dist/
 `'wasm-unsafe-eval'` for MediaInfo) and immutable caching for `/assets/*`.
 
 `.github/workflows/deploy.yml` runs tests and the build on every push and PR.
-On `main` it also deploys with `wrangler pages deploy`. One-time setup:
+On `main` it also deploys with `wrangler pages deploy`. Before that, the job
+creates the `highlight-edl` Pages project through the Cloudflare API if it
+doesn't exist yet. The only setup is two repo secrets:
 
-1. Create the project: `npx wrangler pages project create highlight-edl --production-branch=main`
-2. Add repo secrets `CLOUDFLARE_API_TOKEN` (needs the *Cloudflare Pages: Edit* permission) and `CLOUDFLARE_ACCOUNT_ID`.
+- `CLOUDFLARE_API_TOKEN`: a custom token with just **Account → Cloudflare Pages → Edit**, scoped to your account.
+- `CLOUDFLARE_ACCOUNT_ID`
 
 Don't also connect the repo through Pages' Git integration, or every push will deploy twice.

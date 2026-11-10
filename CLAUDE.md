@@ -15,7 +15,7 @@ There is no backend, and nothing is uploaded. That is a product requirement: don
 - `src/lib/probe.ts` runs mediainfo.js (WASM), lazy-loaded, reading byte ranges from the `File`. The `.wasm` URL comes from Vite's `?url` import.
 - `src/state/markers.ts` holds the marker reducer (kept sorted by in point, min clip 0.1s) and the per-file localStorage persistence.
 - `src/App.tsx` owns the wiring and keyboard shortcuts. The components live in `src/components/`.
-- Deploy: `wrangler.toml` (Pages, `pages_build_output_dir = ./dist`), `public/_headers` (CSP needs `'wasm-unsafe-eval'` for MediaInfo, and `blob:` in `media-src` for playback), and `.github/workflows/deploy.yml` (test + build always; `wrangler pages deploy` on main only).
+- Deploy: `wrangler.toml` (Pages, `pages_build_output_dir = ./dist`), `public/_headers` (CSP needs `'wasm-unsafe-eval'` for MediaInfo, and `blob:` in `media-src` for playback), and `.github/workflows/deploy.yml` (test + build always; on main only, it creates the Pages project via the API if missing, then runs `wrangler pages deploy`).
 
 ## Conventions
 
