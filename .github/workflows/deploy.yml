@@ -1,0 +1,79 @@
+name: Build & deploy to Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          retention-days: 7
+
+  deploy:
+    # Only main deploys; PRs (including forks, which can't read secrets) just build.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.deployment-url }}
+    steps:
+      # wrangler.toml supplies the project name and output dir.
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      # Creates the Pages project on the first run, so no local wrangler setup is needed.
+      - name: Ensure Pages project exists
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PROJECT: highlight-edl
+        run: |
+          api="https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/pages/projects"
+          status=$(curl -sS -o resp.json -w '%{http_code}' -H "Authorization: Bearer $CF_API_TOKEN" "$api/$PROJECT")
+          case "$status" in
+            200) echo "Pages project $PROJECT exists." ;;
+            404)
+              echo "Creating Pages project $PROJECT..."
+              status=$(curl -sS -o resp.json -w '%{http_code}' -X POST "$api" \
+                -H "Authorization: Bearer $CF_API_TOKEN" -H 'Content-Type: application/json' \
+                --data "{\"name\":\"$PROJECT\",\"production_branch\":\"main\"}")
+              if [ "$status" != 200 ]; then
+                echo "::error::Creating Pages project failed (HTTP $status)"; cat resp.json; exit 1
+              fi ;;
+            *)
+              echo "::error::Pages API returned HTTP $status. Check that CLOUDFLARE_API_TOKEN has Account > Cloudflare Pages > Edit and CLOUDFLARE_ACCOUNT_ID is correct."
+              cat resp.json; exit 1 ;;
+          esac
+      - name: Deploy
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: '4.154.0'
+          command: pages deploy --branch=main --commit-hash=${{ github.sha }}
