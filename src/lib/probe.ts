@@ -1,7 +1,8 @@
-// Reads container metadata from the local file with MediaInfoLib compiled to
-// WebAssembly. Nothing is uploaded: the WASM module pulls byte ranges straight
-// from the File object. HTMLVideoElement doesn't expose frame rate or embedded
-// timecode, and an EDL is meaningless without them, so this is the WASM step.
+// Reads container metadata with MediaInfoLib compiled to WebAssembly. Nothing
+// is uploaded: the WASM module pulls byte ranges straight from the source (a
+// local File, or a Drive file through its streaming URL). HTMLVideoElement
+// doesn't expose frame rate or embedded timecode, and an EDL is meaningless
+// without them, so this is the WASM step.
 
 import { type FrameRateOption, normalizeRate } from './timecode';
 import wasmUrl from 'mediainfo.js/MediaInfoModule.wasm?url';
@@ -26,15 +27,17 @@ const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : nul
 
 let factory: Promise<typeof import('mediainfo.js')> | null = null;
 
-export async function probeFile(file: File): Promise<ProbeResult> {
+export interface ProbeSource {
+  size: number;
+  read: (offset: number, length: number) => Promise<Uint8Array>;
+}
+
+export async function probeMedia(source: ProbeSource): Promise<ProbeResult> {
   factory ??= import('mediainfo.js');
   const { default: mediaInfoFactory } = await factory;
   const mi = await mediaInfoFactory({ format: 'object', locateFile: () => wasmUrl });
   try {
-    const result = await mi.analyzeData(
-      () => file.size,
-      async (size, offset) => new Uint8Array(await file.slice(offset, offset + size).arrayBuffer()),
-    );
+    const result = await mi.analyzeData(() => source.size, (size, offset) => source.read(offset, size));
     const tracks = (result.media?.track ?? []) as unknown as Track[];
     const video = tracks.find((t) => t['@type'] === 'Video');
     const general = tracks.find((t) => t['@type'] === 'General');

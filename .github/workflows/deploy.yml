@@ -25,6 +25,13 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+        env:
+          # Optional Google Drive import. These are public browser values (they end
+          # up in the JS bundle), so they're repo variables, not secrets. Unset = no
+          # Drive button.
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          VITE_GOOGLE_API_KEY: ${{ vars.GOOGLE_API_KEY }}
+          VITE_GOOGLE_APP_ID: ${{ vars.GOOGLE_APP_ID }}
       - uses: actions/upload-artifact@v4
         with:
           name: dist

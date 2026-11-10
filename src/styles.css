@@ -215,6 +215,46 @@ kbd {
 }
 .dropzone--compact .dropzone__error {
   margin: 0;
+  flex-basis: 100%;
+}
+.dropzone--compact {
+  flex-wrap: wrap;
+}
+.dropzone__actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.dropzone__drive {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+.dropzone__drive-status {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  flex-basis: 100%;
+}
+.dropzone__drive-status progress {
+  width: min(240px, 50%);
+  accent-color: var(--accent);
+}
+.btn--drive {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn__icon {
+  width: 18px;
+  height: 18px;
 }
 .dropzone__file {
   overflow: hidden;
@@ -326,11 +366,17 @@ kbd {
   position: absolute;
   inset: 0;
   display: grid;
-  place-items: center;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
   padding: 24px;
   text-align: center;
   color: #fff;
   background: rgb(0 0 0 / 0.75);
+}
+.player__error p {
+  margin: 0;
+  max-width: 52ch;
 }
 .player__scrub {
   width: 100%;

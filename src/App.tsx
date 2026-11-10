@@ -5,7 +5,9 @@ import { MarkerList } from './components/MarkerList';
 import { Player, stepFrames } from './components/Player';
 import { TAG_KEYS, TagBar } from './components/TagBar';
 import { DEFAULT_EXPORT_OPTIONS, type ExportOptions, type ExportSource } from './lib/export';
-import { type ProbeResult, probeFile } from './lib/probe';
+import { driveEnabled, openDriveFile, pickDriveFile, reconnectDrive } from './lib/drive';
+import { type LoadedMedia, localMedia } from './lib/media';
+import { type ProbeResult, probeMedia } from './lib/probe';
 import {
   DEFAULT_RATE,
   FRAME_RATES,
@@ -20,11 +22,9 @@ import { TAGS, type Tag, initialMarkerState, loadSaved, markerReducer, save, sto
 
 type ProbeState = { status: 'idle' | 'probing' | 'failed' } | { status: 'done'; result: ProbeResult };
 
-interface Loaded {
-  file: File;
-  url: string;
-  key: string;
-}
+type Loaded = LoadedMedia & { key: string };
+
+type DriveState = { status: 'idle' } | { status: 'busy'; label: string; progress?: number } | { status: 'error'; message: string };
 
 const isTyping = (el: EventTarget | null) =>
   el instanceof HTMLElement && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
@@ -43,24 +43,26 @@ export default function App() {
   const [probe, setProbe] = useState<ProbeState>({ status: 'idle' });
   const [options, setOptions] = useState<ExportOptions>(DEFAULT_EXPORT_OPTIONS);
   const [lastTag, setLastTag] = useState<Tag | null>(null);
+  const [drive, setDrive] = useState<DriveState>({ status: 'idle' });
 
-  const onFile = useCallback(
-    (file: File) => {
+
+  const openMedia = useCallback(
+    (media: LoadedMedia) => {
       setLoaded((prev) => {
-        if (prev) URL.revokeObjectURL(prev.url);
-        return { file, url: URL.createObjectURL(file), key: storageKey(file) };
+        prev?.dispose();
+        return { ...media, key: storageKey(media) };
       });
-      const saved = loadSaved(storageKey(file));
+      const saved = loadSaved(storageKey(media));
       dispatch({
         type: 'load',
         state: saved ?? { ...initialMarkerState, preRollSec: state.preRollSec, postRollSec: state.postRollSec },
       });
       setCurrentTime(0);
       setDuration(0);
-      setOptions((o) => ({ ...o, title: file.name.replace(/\.[^.]+$/, '') }));
+      setOptions((o) => ({ ...o, title: media.name.replace(/\.[^.]+$/, '') }));
       setProbe({ status: 'probing' });
       const gen = ++probeGen.current;
-      probeFile(file).then(
+      probeMedia(media).then(
         (result) => {
           if (gen !== probeGen.current) return;
           setProbe({ status: 'done', result });
@@ -79,6 +81,37 @@ export default function App() {
     },
     [state.preRollSec, state.postRollSec],
   );
+
+  const onFile = useCallback((file: File) => openMedia(localMedia(file)), [openMedia]);
+
+  // Runs from the Drive button's click, which Google's sign-in popup needs.
+  const onDrive = useCallback(async () => {
+    try {
+      setDrive({ status: 'busy', label: 'Connecting to Google Drive…' });
+      const file = await pickDriveFile();
+      if (!file) {
+        setDrive({ status: 'idle' });
+        return;
+      }
+      const name = file.name;
+      setDrive({ status: 'busy', label: `Opening ${name}…` });
+      const media = await openDriveFile(file, (progress) => setDrive({ status: 'busy', label: `Downloading ${name}…`, progress }));
+      openMedia(media);
+      setDrive({ status: 'idle' });
+    } catch (err) {
+      setDrive({ status: 'error', message: err instanceof Error ? err.message : String(err) });
+    }
+  }, [openMedia]);
+
+  // After the hour-long Drive token expires, playback stalls; this resumes where it was.
+  const onReconnectDrive = useCallback(async () => {
+    await reconnectDrive();
+    const v = videoRef.current;
+    if (!v) return;
+    const t = v.currentTime;
+    v.load();
+    v.addEventListener('loadedmetadata', () => (v.currentTime = t), { once: true });
+  }, []);
 
   useEffect(() => {
     if (loaded) save(loaded.key, state);
@@ -151,8 +184,8 @@ export default function App() {
   const startFrames = (tcValid && timecodeToFrames(startTimecode, rate, df)) || 0;
 
   const source: ExportSource | null = loaded && {
-    name: loaded.file.name,
-    sizeBytes: loaded.file.size,
+    name: loaded.name,
+    sizeBytes: loaded.size,
     durationSec: duration,
     rate,
     dropFrame: df,
@@ -171,10 +204,10 @@ export default function App() {
 
       {!loaded ? (
         <main className="intro">
-          <DropZone onFile={onFile} />
+          <DropZone onFile={onFile} drive={driveEnabled ? { onPick: onDrive, ...drive } : undefined} />
           <ul className="intro__steps">
             <li>
-              <b>Load</b> any video your browser can play. Frame rate and start timecode are read locally with MediaInfo (WebAssembly).
+              <b>Load</b> any video your browser can play{driveEnabled ? ', from this device or Google Drive' : ''}. Frame rate and start timecode are read locally with MediaInfo (WebAssembly).
             </li>
             <li>
               <b>Tag</b> moments as #quote, #broll or #turning-point with one key press.
@@ -187,7 +220,12 @@ export default function App() {
       ) : (
         <main className="workspace">
           <div className="workspace__main">
-            <DropZone onFile={onFile} compact fileName={loaded.file.name} />
+            <DropZone
+              onFile={onFile}
+              compact
+              fileName={loaded.name}
+              drive={driveEnabled ? { onPick: onDrive, ...drive } : undefined}
+            />
             <Player
               src={loaded.url}
               videoRef={videoRef}
@@ -198,6 +236,7 @@ export default function App() {
               duration={duration}
               onTime={setCurrentTime}
               onDuration={setDuration}
+              errorAction={loaded.origin === 'drive' ? { label: 'Reconnect Google Drive', run: onReconnectDrive } : undefined}
             />
             <TagBar
               onTag={addMarker}

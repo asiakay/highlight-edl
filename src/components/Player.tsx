@@ -11,6 +11,8 @@ interface Props {
   duration: number;
   onTime: (t: number) => void;
   onDuration: (d: number) => void;
+  /** Offered on a playback error, e.g. to renew an expired Google Drive token. */
+  errorAction?: { label: string; run: () => Promise<void> } | undefined;
 }
 
 const RATES = [0.25, 0.5, 1, 1.5, 2];
@@ -20,7 +22,7 @@ export function stepFrames(video: HTMLVideoElement, rate: FrameRate, frames: num
   video.currentTime = stepTarget(video.currentTime, rate, frames);
 }
 
-export function Player({ src, videoRef, rate, dropFrame, startFrames, currentTime, duration, onTime, onDuration }: Props) {
+export function Player({ src, videoRef, rate, dropFrame, startFrames, currentTime, duration, onTime, onDuration, errorAction }: Props) {
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [error, setError] = useState<string | null>(null);
@@ -71,11 +73,29 @@ export function Player({ src, videoRef, rate, dropFrame, startFrames, currentTim
           }}
           onError={() =>
             setError(
-              'Your browser can’t decode this file’s codec (common with ProRes, DNxHD or HEVC). Try an H.264/MP4 or WebM proxy.',
+              errorAction
+                ? 'Playback from Google Drive stopped. Drive access lasts an hour, so it may need reconnecting. If it never played, your browser may not decode this codec (ProRes, DNxHD, often HEVC).'
+                : 'Your browser can’t decode this file’s codec (common with ProRes, DNxHD or HEVC). Try an H.264/MP4 or WebM proxy.',
             )
           }
         />
-        {error && <div className="player__error">{error}</div>}
+        {error && (
+          <div className="player__error">
+            <p>{error}</p>
+            {errorAction && (
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => {
+                  setError(null);
+                  errorAction.run().catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+                }}
+              >
+                {errorAction.label}
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <input
