@@ -12,6 +12,7 @@ import {
   type FrameRateOption,
   isValidTimecode,
   rateLabel,
+  snapToFrame,
   supportsDropFrame,
   timecodeToFrames,
 } from './lib/timecode';
@@ -30,6 +31,8 @@ const isTyping = (el: EventTarget | null) =>
 
 export default function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
+  // Bumped per loaded file so a slow probe of a replaced file can't apply its metadata.
+  const probeGen = useRef(0);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [state, dispatch] = useReducer(markerReducer, initialMarkerState);
   const [currentTime, setCurrentTime] = useState(0);
@@ -56,8 +59,10 @@ export default function App() {
       setDuration(0);
       setOptions((o) => ({ ...o, title: file.name.replace(/\.[^.]+$/, '') }));
       setProbe({ status: 'probing' });
+      const gen = ++probeGen.current;
       probeFile(file).then(
         (result) => {
+          if (gen !== probeGen.current) return;
           setProbe({ status: 'done', result });
           if (result.rate) {
             setRate(result.rate);
@@ -66,6 +71,7 @@ export default function App() {
           setStartTimecode(result.startTimecode ?? '00:00:00:00');
         },
         (err: unknown) => {
+          if (gen !== probeGen.current) return;
           console.warn('Media probe failed', err);
           setProbe({ status: 'failed' });
         },
@@ -86,14 +92,14 @@ export default function App() {
         type: 'add',
         id: crypto.randomUUID(),
         tag,
-        timeSec: v.currentTime,
+        timeSec: snapToFrame(v.currentTime, rate),
         durationSec: v.duration,
         createdAt: new Date().toISOString(),
       });
       setLastTag(tag);
       setTimeout(() => setLastTag((t) => (t === tag ? null : t)), 350);
     },
-    [],
+    [rate],
   );
 
   const seek = useCallback((sec: number) => {

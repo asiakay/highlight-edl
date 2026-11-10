@@ -4,6 +4,8 @@ import {
   framesToTimecode,
   normalizeRate,
   secondsToFrames,
+  snapToFrame,
+  stepTarget,
   supportsDropFrame,
   timecodeToFrames,
 } from './timecode';
@@ -54,5 +56,35 @@ describe('timecode', () => {
     expect(normalizeRate(29.970029).label).toBe('29.97');
     expect(normalizeRate({ num: 2997, den: 100 }).label).toBe('29.97');
     expect(normalizeRate(12.5).label).toBe('12.5');
+  });
+
+  it('steps one frame at a time in both directions', () => {
+    for (const r of [rate('25'), rate('29.97'), rate('23.976')]) {
+      let t = stepTarget(10 / (r.num / r.den), r, 0);
+      expect(secondsToFrames(t, r)).toBe(10);
+      for (let i = 1; i <= 5; i++) {
+        t = stepTarget(t, r, 1);
+        expect(secondsToFrames(t, r)).toBe(10 + i);
+      }
+      for (let i = 1; i <= 8; i++) {
+        t = stepTarget(t, r, -1);
+        expect(secondsToFrames(t, r)).toBe(15 - i);
+      }
+    }
+  });
+
+  it('steps from the frame on screen, not the nearest frame boundary', () => {
+    const r = rate('25');
+    // 0.7 into frame 10: frame 10 is showing, so back one is frame 9.
+    expect(secondsToFrames(stepTarget(10.7 / 25, r, -1), r)).toBe(9);
+    expect(stepTarget(0.01, r, -3)).toBeCloseTo(0.25 / 25);
+  });
+
+  it('snaps a playhead time to the frame on screen, surviving ms rounding', () => {
+    const r = rate('29.97');
+    // 2.0s is 59.94 frames in: frame 59 is showing, not 60.
+    const t = snapToFrame(2, r);
+    expect(secondsToFrames(t, r)).toBe(59);
+    expect(secondsToFrames(Math.round(t * 1000) / 1000, r)).toBe(59);
   });
 });

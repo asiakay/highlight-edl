@@ -65,6 +65,30 @@ export function framesToSeconds(frames: number, rate: FrameRate): number {
   return (frames * rate.den) / rate.num;
 }
 
+/** The frame on screen at a playhead time: the one containing it (floor, not round). */
+export function frameAt(seconds: number, rate: FrameRate): number {
+  return Math.max(0, Math.floor((seconds * rate.num) / rate.den + 1e-6));
+}
+
+/**
+ * A quarter of the way into a frame: past its start so decoders don't show the
+ * previous frame, and short of the midpoint so secondsToFrames (which rounds,
+ * and is safe on ms-rounded stored times) maps it back to the same frame.
+ */
+function insideFrame(frame: number, rate: FrameRate): number {
+  return framesToSeconds(Math.max(0, frame) + 0.25, rate);
+}
+
+/** Playhead time moved onto the frame on screen, so exports agree with the readout. */
+export function snapToFrame(seconds: number, rate: FrameRate): number {
+  return insideFrame(frameAt(seconds, rate), rate);
+}
+
+/** Seek position for stepping `frames` from the frame on screen at `seconds`. */
+export function stepTarget(seconds: number, rate: FrameRate, frames: number): number {
+  return insideFrame(frameAt(seconds, rate) + frames, rate);
+}
+
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
 export function framesToTimecode(frames: number, rate: FrameRate, dropFrame = false): string {

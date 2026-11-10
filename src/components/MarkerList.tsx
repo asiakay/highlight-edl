@@ -1,5 +1,5 @@
 import type { Dispatch } from 'react';
-import { type FrameRate, formatDuration, framesToTimecode, secondsToFrames } from '../lib/timecode';
+import { type FrameRate, formatDuration, framesToTimecode, secondsToFrames, snapToFrame } from '../lib/timecode';
 import { TAGS, type Marker, type MarkerAction, type Tag } from '../state/markers';
 import { tagClass } from './TagBar';
 
@@ -84,7 +84,7 @@ export function MarkerList({ markers, dispatch, rate, dropFrame, startFrames, cu
                 <button
                   type="button"
                   className="btn btn--small"
-                  onClick={() => dispatch({ type: 'update', id: m.id, patch: { inSec: currentTime } })}
+                  onClick={() => dispatch({ type: 'update', id: m.id, patch: { inSec: snapToFrame(currentTime, rate) } })}
                   title="Set in point to playhead"
                 >
                   In ⇤
@@ -92,7 +92,7 @@ export function MarkerList({ markers, dispatch, rate, dropFrame, startFrames, cu
                 <button
                   type="button"
                   className="btn btn--small"
-                  onClick={() => dispatch({ type: 'update', id: m.id, patch: { outSec: currentTime } })}
+                  onClick={() => dispatch({ type: 'update', id: m.id, patch: { outSec: snapToFrame(currentTime, rate) } })}
                   title="Set out point to playhead"
                 >
                   ⇥ Out

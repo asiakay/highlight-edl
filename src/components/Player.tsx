@@ -1,5 +1,5 @@
 import { useEffect, useState, type RefObject } from 'react';
-import { type FrameRate, framesToSeconds, framesToTimecode, secondsToFrames } from '../lib/timecode';
+import { type FrameRate, frameAt, framesToTimecode, secondsToFrames, stepTarget } from '../lib/timecode';
 
 interface Props {
   src: string;
@@ -17,9 +17,7 @@ const RATES = [0.25, 0.5, 1, 1.5, 2];
 
 export function stepFrames(video: HTMLVideoElement, rate: FrameRate, frames: number) {
   video.pause();
-  // Land in the middle of the target frame so decoders don't round back a frame.
-  const target = secondsToFrames(video.currentTime, rate) + frames;
-  video.currentTime = Math.max(0, framesToSeconds(target + 0.5, rate));
+  video.currentTime = stepTarget(video.currentTime, rate, frames);
 }
 
 export function Player({ src, videoRef, rate, dropFrame, startFrames, currentTime, duration, onTime, onDuration }: Props) {
@@ -47,7 +45,7 @@ export function Player({ src, videoRef, rate, dropFrame, startFrames, currentTim
     const el = v();
     if (el) el.currentTime = Math.min(Math.max(0, el.currentTime + sec), el.duration || Infinity);
   };
-  const tc = framesToTimecode(startFrames + secondsToFrames(currentTime, rate), rate, dropFrame);
+  const tc = framesToTimecode(startFrames + frameAt(currentTime, rate), rate, dropFrame);
   const endTc = framesToTimecode(startFrames + secondsToFrames(duration, rate), rate, dropFrame);
 
   return (
